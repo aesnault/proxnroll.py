@@ -1,0 +1,101 @@
+#!/usr/bin/python
+import argparse
+import struct
+
+from smartcard.System import readers
+from smartcard.pcsc.PCSCPart10 import (SCARD_SHARE_DIRECT,
+    SCARD_LEAVE_CARD, FEATURE_CCID_ESC_COMMAND, getFeatureRequest, hasFeature)
+
+
+parser = argparse.ArgumentParser(description="ProxnRoll control")
+parser.add_argument('--green', action="store",
+                   help='green led command')
+parser.add_argument('--blue', action="store",
+                   help='blue led command')
+parser.add_argument('--red', action="store",
+                   help='red led command')
+parser.add_argument('--product', action="store_true", default=False,
+                   help='print device information')
+parser.add_argument('--slots', action="store_true", default=False,
+                   help='print slot information use with --product')
+parser.add_argument('--buzzer', type=int, default=0, action="store",
+                   help='buzzer duration in ms (default: 0)')
+
+args = parser.parse_args()
+
+#print(args._get_kwargs())
+
+card_connection = readers()[0].createConnection()
+card_connection.connect(mode=SCARD_SHARE_DIRECT,
+                         disposition=SCARD_LEAVE_CARD)
+
+feature_list = getFeatureRequest(card_connection)
+
+ccid_esc_command = hasFeature(feature_list, FEATURE_CCID_ESC_COMMAND)
+if ccid_esc_command is None:
+    raise Exception("The reader does not support FEATURE_CCID_ESC_COMMAND")
+
+
+ledval = \
+{
+    "off"       : 0,
+    "on"        : 1,
+    "slowblink" : 2,
+    "auto"      : 3,
+    "fastblink" : 4,
+    "hearbeat"  : 5,
+}
+
+ledpos = \
+{
+    "red"  : 2,
+    "green": 3,
+    "blue" : 4,
+}
+
+product = \
+{
+    "Vendor name " : [0x58, 0x20, 0x01],
+    "Product name" : [0x58, 0x20, 0x02],
+    "Product serial number" : [0x58, 0x20, 0x03],
+    "USB vendor ID and product ID" : [0x58, 0x20, 0x04],
+    "Product version" : [0x58, 0x20, 0x05],
+    "NXP MfRCxxx product code" : [0x58, 0x20, 0x10],
+    "Gemalto Gemcore product name and version" : [0x58, 0x20, 0x11],
+}
+
+#set led values
+ledc = [0x58, 0x1E, 0x00, 0x00, 0x00]
+for l in ledpos:
+    lv = args.__dict__.get(l)
+    if lv is not None:
+        ledc[ledpos.get(l)]= ledval.get(lv)
+
+card_connection.control(ccid_esc_command,ledc)
+
+slotcommand = [0x58, 0x21]
+slots = {"Contactless", "Contact",  "SIM/SAM (Main)", "SIM/SAM (Aux A)" "SIM/SAM (Aux B)"}
+#print product info
+if args.product:
+    for k,p in product.iteritems():
+        r = card_connection.control(ccid_esc_command,p)
+        print k,": " , ''.join([chr(x) for x in r])
+    r = card_connection.control(ccid_esc_command,slotcommand)
+    print "Name of the current slot: " , ''.join([chr(x) for x in r[1::]])
+    i = 0
+    r = card_connection.control(ccid_esc_command,slotcommand+[i])
+    while ( (r[0] == 0) and i<256):
+        ret = ''.join([ chr(x) for x in r[1::] ])
+        if ret in slots or args.slots:
+            print "Name of slot", i, ":", ret
+        i+=1
+        r = card_connection.control(ccid_esc_command,slotcommand+[i])
+        
+    
+
+#buzzer
+if args.buzzer > 0:
+    b = [ord(h) for h in struct.pack('h',args.buzzer)]
+    com = [0x58, 0x1C]+b[::-1]
+    #print com
+    r = card_connection.control(ccid_esc_command,com)
