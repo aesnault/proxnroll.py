@@ -45,7 +45,7 @@ ledval = \
     "slowblink" : 2,
     "auto"      : 3,
     "fastblink" : 4,
-    "hearbeat"  : 5,
+    "heartbeat"  : 5,
 }
 
 ledpos = \
@@ -71,8 +71,12 @@ ledc = [0x58, 0x1E, 0x00, 0x00, 0x00]
 for l in ledpos:
     lv = args.__dict__.get(l)
     if lv is not None:
-        ledc[ledpos.get(l)]= ledval.get(lv)
-
+        t = ledval.get(lv)
+        if t is not None:
+            ledc[ledpos.get(l)]= t
+        else:
+            print "'",lv,"',not allowed"
+print ledc
 card_connection.control(ccid_esc_command,ledc)
 
 slotcommand = [0x58, 0x21]
