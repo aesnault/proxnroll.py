@@ -18,6 +18,8 @@ parser.add_argument('--product', action="store_true", default=False,
                    help='print device information')
 parser.add_argument('--slots', action="store_true", default=False,
                    help='print slot information use with --product')
+parser.add_argument('--registers', action="store_true", default=False,
+                   help='print registers values')
 parser.add_argument('--buzzer', type=int, default=0, action="store",
                    help='buzzer duration in ms (default: 0)')
 
@@ -92,10 +94,23 @@ if args.product:
         r = card_connection.control(ccid_esc_command,slotcommand+[i])
         
     
-
 #buzzer
 if args.buzzer > 0:
     b = [ord(h) for h in struct.pack('h',args.buzzer)]
     com = [0x58, 0x1C]+b[::-1]
     #print com
     r = card_connection.control(ccid_esc_command,com)
+
+#Registers
+
+def read_register(card_connection,idx):
+    com = [0x58, 0x0E]
+    r = card_connection.control(ccid_esc_command,com+[idx])
+    if r[0] == 0x00:
+        return r[::1]
+    else:
+        return None
+
+if args.registers:
+    for i in range(256):
+        print "Regsiter:",i,":",read_register(card_connection,i)
